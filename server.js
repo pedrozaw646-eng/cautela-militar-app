@@ -75,27 +75,32 @@ app.get('/api/solicitacoes', (req, res) => {
 });
 
 app.post('/api/solicitacoes', (req, res) => {
-    const { saram, nomeGuerra, itemId, quantidade } = req.body;
+    const { id, saram, nomeGuerra, itemId, quantidade } = req.body;
     const qtdNum = Number(quantidade) || 1;
-    const item = DB.itens.find(i => i.id === Number(itemId));
+    const item = DB.itens.find(i => String(i.id) === String(itemId));
 
-    if (!item || item.qtdDisponivel < qtdNum) {
-        return res.status(400).json({ error: 'Quantidade indisponível em estoque' });
+    if (!item) {
+        return res.status(404).json({ error: 'Item não encontrado no estoque' });
     }
 
-    const novaSol = {
-        id: Date.now(),
-        saram,
-        nomeGuerra,
-        itemId: item.id,
-        itemNome: `${item.nome} [${item.codigo}]`,
-        quantidade: qtdNum,
-        data: new Date().toLocaleString('pt-BR'),
-        status: 'PENDENTE'
-    };
+    const solId = id || Date.now();
+    let solExistente = DB.solicitacoes.find(s => String(s.id) === String(solId));
 
-    DB.solicitacoes.push(novaSol);
-    res.json({ success: true, solicitacao: novaSol });
+    if (!solExistente) {
+        solExistente = {
+            id: solId,
+            saram,
+            nomeGuerra,
+            itemId: item.id,
+            itemNome: `${item.nome} [${item.codigo}]`,
+            quantidade: qtdNum,
+            data: new Date().toLocaleString('pt-BR'),
+            status: 'PENDENTE'
+        };
+        DB.solicitacoes.push(solExistente);
+    }
+
+    res.json({ success: true, solicitacao: solExistente });
 });
 
 app.post('/api/solicitacoes/:id/aprovar', (req, res) => {

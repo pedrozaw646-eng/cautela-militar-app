@@ -98,11 +98,11 @@
             const resSol = await fetch('/api/solicitacoes');
             const solicitacoes = await resSol.json();
 
-            renderizarEstoque(itens);
-            renderizarPendentes(solicitacoes);
-            renderizarAtivas(solicitacoes);
+            renderizarEstoque(itens || []);
+            renderizarPendentes(solicitacoes || []);
+            renderizarAtivas(solicitacoes || []);
         } catch (err) {
-            console.log(err);
+            console.log("Erro ao carregar do servidor", err);
         }
     }
 
