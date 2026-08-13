@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="/manifest.json">
+    <title>Cautela Militar - App do Militar</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent-primary: #3b82f6;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --border-color: #334155;
+            --success: #22c55e;
+            --warning: #f59e0b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding: 16px; min-height: 100vh; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+        .header h1 { font-size: 1.2rem; }
+        .user-badge { font-size: 0.8rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-primary); padding: 4px 8px; border-radius: 12px; border: 1px solid var(--accent-primary); }
+
+        .card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+        .card h2 { font-size: 1.1rem; margin-bottom: 12px; color: var(--accent-primary); }
+        
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-size: 0.8rem; margin-bottom: 4px; color: var(--text-sub); }
+        input, select { width: 100%; padding: 12px; background-color: #0f172a; border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-size: 1rem; }
+        
+        button { width: 100%; padding: 14px; background-color: var(--success); color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 1rem; cursor: pointer; }
+        button:active { opacity: 0.8; }
+        .btn-logout { background: transparent; color: var(--text-sub); border: 1px solid var(--border-color); padding: 6px 12px; width: auto; font-size: 0.8rem; }
+
+        .list-item { background: #0f172a; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 8px; }
+        .list-item-title { font-weight: bold; font-size: 0.95rem; margin-bottom: 4px; }
+        .list-item-sub { font-size: 0.8rem; color: var(--text-sub); }
+
+        .badge { padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; display: inline-block; margin-top: 6px; }
+        .badge-pendente { background-color: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid var(--warning); }
+        .badge-aprovada { background-color: rgba(34, 197, 94, 0.2); color: var(--success); border: 1px solid var(--success); }
+
+        #screenApp { display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- TELA DE LOGIN -->
+    <div id="screenLogin" class="card" style="margin-top: 40px;">
+        <h2>Identificação do Militar</h2>
+        <form id="formLogin">
+            <div class="form-group">
+                <label>Nome de Guerra</label>
+                <input type="text" id="loginNome" required placeholder="Ex: Silva">
+            </div>
+            <div class="form-group">
+                <label>SARAM</label>
+                <input type="text" id="loginSaram" required placeholder="Ex: 1234567">
+            </div>
+            <button type="submit" style="background-color: var(--accent-primary);">Entrar no Sistema</button>
+        </form>
+    </div>
+
+    <!-- TELA PRINCIPAL DO APP -->
+    <div id="screenApp">
+        <div class="header">
+            <h1>Cautela Militar</h1>
+            <div>
+                <span id="userDisplay" class="user-badge"></span>
+                <button class="btn-logout" onclick="logout()">Sair</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Solicitar Equipamento</h2>
+            <form id="formSolicitar">
+                <div class="form-group">
+                    <label>Item Disponível no Estoque</label>
+                    <select id="selectEstoque" required>
+                        <option value="">Carregando estoque...</option>
+                    </select>
+                </div>
+                <button type="submit">Enviar Solicitação</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Minhas Cautelas Ativas</h2>
+            <div id="containerMinhasCautelas">
+                <!-- Cautelas isoladas do militar logado -->
+            </div>
+        </div>
+    </div>
+
+<script>
+    let militarLogado = JSON.parse(localStorage.getItem('militar_logado')) || null;
+
+    function checkAuth() {
+        if (militarLogado) {
+            document.getElementById('screenLogin').style.display = 'none';
+            document.getElementById('screenApp').style.display = 'block';
+            document.getElementById('userDisplay').innerText = `${militarLogado.nomeGuerra} (${militarLogado.saram})`;
+            carregarEstoque();
+            carregarMinhasCautelas();
+        } else {
+            document.getElementById('screenLogin').style.display = 'block';
+            document.getElementById('screenApp').style.display = 'none';
+        }
+    }
+
+    document.getElementById('formLogin').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const nomeGuerra = document.getElementById('loginNome').value.trim();
+        const saram = document.getElementById('loginSaram').value.trim();
+
+        militarLogado = { nomeGuerra, saram };
+        localStorage.setItem('militar_logado', JSON.stringify(militarLogado));
+        checkAuth();
+    });
+
+    function logout() {
+        localStorage.removeItem('militar_logado');
+        militarLogado = null;
+        checkAuth();
+    }
+
+    async function carregarEstoque() {
+        try {
+            const res = await fetch('/api/itens');
+            const itens = await res.json();
+            const select = document.getElementById('selectEstoque');
+            select.innerHTML = '<option value="">Selecione o equipamento...</option>';
+            itens.filter(i => i.qtdDisponivel > 0).forEach(i => {
+                select.innerHTML += `<option value="${i.id}">${i.nome} [${i.codigo}] - Restante: ${i.qtdDisponivel}</option>`;
+            });
+        } catch (err) {
+            console.log("Servidor off, carregando local", err);
+        }
+    }
+
+    async function carregarMinhasCautelas() {
+        if (!militarLogado) return;
+        try {
+            const res = await fetch(`/api/solicitacoes?saram=${militarLogado.saram}`);
+            const cautelas = await res.json();
+            const container = document.getElementById('containerMinhasCautelas');
+            container.innerHTML = '';
+
+            if (cautelas.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-sub); font-size: 0.9rem;">Você não possui cautelas ativas no momento.</p>';
+                return;
+            }
+
+            cautelas.forEach(c => {
+                const statusBadge = c.status === 'PENDENTE'
+                    ? '<span class="badge badge-pendente">Aguardando Aprovação</span>'
+                    : `<span class="badge badge-aprovada">Aprovado (${c.dataAprovacao || c.data})</span>`;
+
+                container.innerHTML += `
+                    <div class="list-item">
+                        <div class="list-item-title">${c.itemNome}</div>
+                        <div class="list-item-sub">Data do pedido: ${c.data}</div>
+                        ${statusBadge}
+                    </div>
+                `;
+            });
+        } catch (err) {
+            console.log(err);
+        }
+    }
+
+    document.getElementById('formSolicitar').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const itemId = document.getElementById('selectEstoque').value;
+        if (!itemId) return;
+
+        await fetch('/api/solicitacoes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                saram: militarLogado.saram,
+                nomeGuerra: militarLogado.nomeGuerra,
+                itemId: itemId
+            })
+        });
+
+        alert('Solicitação enviada para a reserva!');
+        carregarEstoque();
+        carregarMinhasCautelas();
+    });
+
+    checkAuth();
+    setInterval(() => {
+        if (militarLogado) {
+            carregarEstoque();
+            carregarMinhasCautelas();
+        }
+    }, 3000);
+</script>
+</body>
+</html>

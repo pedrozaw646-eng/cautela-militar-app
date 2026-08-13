@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="/manifest.json">
+    <title>Gestão de Estoque - Reserva Admin</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent-primary: #3b82f6;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --border-color: #334155;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --warning: #f59e0b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding: 16px; min-height: 100vh; }
+        
+        .header { padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+        .header h1 { font-size: 1.2rem; color: var(--accent-primary); }
+
+        .card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+        .card h2 { font-size: 1.1rem; margin-bottom: 12px; color: var(--accent-primary); }
+        
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-size: 0.8rem; margin-bottom: 4px; color: var(--text-sub); }
+        input { width: 100%; padding: 12px; background-color: #0f172a; border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-size: 1rem; }
+        
+        button { padding: 10px 14px; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer; }
+        .btn-add { width: 100%; background-color: var(--accent-primary); padding: 14px; font-size: 1rem; }
+        .btn-success { background-color: var(--success); }
+        .btn-danger { background-color: var(--danger); }
+
+        .list-item { background: #0f172a; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .list-item-title { font-weight: bold; font-size: 0.95rem; }
+        .list-item-sub { font-size: 0.8rem; color: var(--text-sub); margin-top: 2px; }
+        .actions { display: flex; gap: 6px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Gestão de Estoque e Aprovações</h1>
+    </div>
+
+    <!-- Adicionar Estoque -->
+    <div class="card">
+        <h2>Adicionar Item / Equipamento</h2>
+        <form id="formAdicionarItem">
+            <div class="form-group">
+                <label>Nome do Item</label>
+                <input type="text" id="nome" required placeholder="Ex: Capa de Colete">
+            </div>
+            <div class="form-group">
+                <label>Código / Patrimônio</label>
+                <input type="text" id="codigo" required placeholder="Ex: COL-100">
+            </div>
+            <div class="form-group">
+                <label>Quantidade</label>
+                <input type="number" id="qtd" required min="1" value="1">
+            </div>
+            <button type="submit" class="btn-add">Adicionar ao Estoque</button>
+        </form>
+    </div>
+
+    <!-- Solicitações Pendentes -->
+    <div class="card">
+        <h2>Solicitações Pendentes</h2>
+        <div id="containerPendentes"></div>
+    </div>
+
+    <!-- Cautelas Ativas -->
+    <div class="card">
+        <h2>Cautelas Ativas (Com o Militar)</h2>
+        <div id="containerAtivas"></div>
+    </div>
+
+    <!-- Estoque Atual -->
+    <div class="card">
+        <h2>Estoque Cadastrado</h2>
+        <div id="containerEstoque"></div>
+    </div>
+
+<script>
+    async function carregarDados() {
+        try {
+            const resItens = await fetch('/api/itens');
+            const itens = await resItens.json();
+
+            const resSol = await fetch('/api/solicitacoes');
+            const solicitacoes = await resSol.json();
+
+            renderizarEstoque(itens);
+            renderizarPendentes(solicitacoes);
+            renderizarAtivas(solicitacoes);
+        } catch (err) {
+            console.log(err);
+        }
+    }
+
+    document.getElementById('formAdicionarItem').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const nome = document.getElementById('nome').value;
+        const codigo = document.getElementById('codigo').value;
+        const qtdTotal = document.getElementById('qtd').value;
+
+        await fetch('/api/itens', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nome, codigo, qtdTotal })
+        });
+
+        e.target.reset();
+        carregarDados();
+    });
+
+    async function aprovar(id) {
+        await fetch(`/api/solicitacoes/${id}/aprovar`, { method: 'POST' });
+        carregarDados();
+    }
+
+    async function devolver(id) {
+        await fetch(`/api/solicitacoes/${id}/devolver`, { method: 'POST' });
+        carregarDados();
+    }
+
+    async function excluirItem(id) {
+        if (confirm('Deseja realmente remover este item do estoque?')) {
+            await fetch(`/api/itens/${id}`, { method: 'DELETE' });
+            carregarDados();
+        }
+    }
+
+    function renderizarEstoque(itens) {
+        const container = document.getElementById('containerEstoque');
+        container.innerHTML = '';
+        itens.forEach(i => {
+            container.innerHTML += `
+                <div class="list-item">
+                    <div>
+                        <div class="list-item-title">${i.nome} [${i.codigo}]</div>
+                        <div class="list-item-sub">Total: ${i.qtdTotal} | Disponível: <b>${i.qtdDisponivel}</b></div>
+                    </div>
+                    <button class="btn-danger" onclick="excluirItem(${i.id})">Excluir</button>
+                </div>
+            `;
+        });
+    }
+
+    function renderizarPendentes(solicitacoes) {
+        const container = document.getElementById('containerPendentes');
+        container.innerHTML = '';
+        const pendentes = solicitacoes.filter(s => s.status === 'PENDENTE');
+        if (pendentes.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-sub); font-size: 0.9rem;">Nenhuma solicitação pendente.</p>';
+            return;
+        }
+
+        pendentes.forEach(s => {
+            container.innerHTML += `
+                <div class="list-item">
+                    <div>
+                        <div class="list-item-title">${s.nomeGuerra} (${s.saram})</div>
+                        <div class="list-item-sub">Item: ${s.itemNome} | ${s.data}</div>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-success" onclick="aprovar(${s.id})">Aprovar</button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    function renderizarAtivas(solicitacoes) {
+        const container = document.getElementById('containerAtivas');
+        container.innerHTML = '';
+        const ativas = solicitacoes.filter(s => s.status === 'APROVADA');
+        if (ativas.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-sub); font-size: 0.9rem;">Nenhuma cautela ativa no momento.</p>';
+            return;
+        }
+
+        ativas.forEach(s => {
+            container.innerHTML += `
+                <div class="list-item">
+                    <div>
+                        <div class="list-item-title">${s.nomeGuerra} (${s.saram})</div>
+                        <div class="list-item-sub">Item: ${s.itemNome}</div>
+                    </div>
+                    <button class="btn-danger" onclick="devolver(${s.id})">Dar Baixa</button>
+                </div>
+            `;
+        });
+    }
+
+    carregarDados();
+    setInterval(carregarDados, 3000);
+</script>
+</body>
+</html>

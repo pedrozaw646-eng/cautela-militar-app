@@ -1,0 +1,16 @@
+{
+  "short_name": "CautelaMilitar",
+  "name": "Sistema de Cautela Militar",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1066/1066371.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/militar.html",
+  "background_color": "#0f172a",
+  "theme_color": "#3b82f6",
+  "display": "standalone",
+  "orientation": "portrait"
+}
