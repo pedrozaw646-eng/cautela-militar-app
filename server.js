@@ -9,8 +9,8 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Banco de Dados em Memória / JSON Persistente
-let DB = {
+// Banco de Dados Serverless Persistente em Memória Global
+global.DB = global.DB || {
     usuarios: [
         { saram: '1234567', nomeGuerra: 'Silva', senha: '123' },
         { saram: '7654321', nomeGuerra: 'Santos', senha: '123' }
@@ -21,6 +21,7 @@ let DB = {
     ],
     solicitacoes: []
 };
+const DB = global.DB;
 
 // Rotas de Autenticação
 app.post('/api/login', (req, res) => {
@@ -98,28 +99,34 @@ app.post('/api/solicitacoes', (req, res) => {
 });
 
 app.post('/api/solicitacoes/:id/aprovar', (req, res) => {
-    const id = Number(req.params.id);
-    const sol = DB.solicitacoes.find(s => s.id === id);
-    const item = DB.itens.find(i => i.id === sol.itemId);
+    const id = req.params.id;
+    const sol = DB.solicitacoes.find(s => String(s.id) === String(id));
+    if (!sol) {
+        return res.status(404).json({ error: 'Solicitação não encontrada' });
+    }
+    const item = DB.itens.find(i => String(i.id) === String(sol.itemId));
     const qtdNum = sol.quantidade || 1;
 
-    if (sol && item && item.qtdDisponivel >= qtdNum) {
+    if (item && item.qtdDisponivel >= qtdNum) {
         sol.status = 'APROVADA';
         sol.dataAprovacao = new Date().toLocaleString('pt-BR');
         item.qtdDisponivel -= qtdNum;
         item.qtdTotal -= qtdNum;
-        return res.json({ success: true });
+        return res.json({ success: true, solicitacao: sol });
     }
-    res.status(400).json({ error: 'Não foi possível aprovar' });
+    res.status(400).json({ error: 'Estoque insuficiente' });
 });
 
 app.post('/api/solicitacoes/:id/devolver', (req, res) => {
-    const id = Number(req.params.id);
-    const sol = DB.solicitacoes.find(s => s.id === id);
-    const item = DB.itens.find(i => i.id === sol.itemId);
+    const id = req.params.id;
+    const sol = DB.solicitacoes.find(s => String(s.id) === String(id));
+    if (!sol) {
+        return res.status(404).json({ error: 'Solicitação não encontrada' });
+    }
+    const item = DB.itens.find(i => String(i.id) === String(sol.itemId));
     const qtdNum = sol.quantidade || 1;
 
-    if (sol && item) {
+    if (item) {
         sol.status = 'DEVOLVIDO';
         item.qtdDisponivel += qtdNum;
         item.qtdTotal += qtdNum;

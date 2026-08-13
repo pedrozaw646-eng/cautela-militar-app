@@ -157,33 +157,44 @@
 
     async function carregarMinhasCautelas() {
         if (!militarLogado) return;
+
+        // Recupera histórico salvo localmente no celular como backup permanente
+        let cautelasLocais = JSON.parse(localStorage.getItem(`cautelas_${militarLogado.saram}`)) || [];
+
         try {
             const res = await fetch(`/api/solicitacoes?saram=${militarLogado.saram}`);
-            const cautelas = await res.json();
-            const container = document.getElementById('containerMinhasCautelas');
-            container.innerHTML = '';
-
-            if (cautelas.length === 0) {
-                container.innerHTML = '<p style="color: var(--text-sub); font-size: 0.9rem;">Você não possui cautelas ativas no momento.</p>';
-                return;
+            if (res.ok) {
+                const cautelasServidor = await res.json();
+                if (cautelasServidor && cautelasServidor.length > 0) {
+                    cautelasLocais = cautelasServidor;
+                    localStorage.setItem(`cautelas_${militarLogado.saram}`, JSON.stringify(cautelasServidor));
+                }
             }
-
-            cautelas.forEach(c => {
-                const statusBadge = c.status === 'PENDENTE'
-                    ? '<span class="badge badge-pendente">Aguardando Aprovação</span>'
-                    : `<span class="badge badge-aprovada">Aprovado (${c.dataAprovacao || c.data})</span>`;
-
-                container.innerHTML += `
-                    <div class="list-item">
-                        <div class="list-item-title">${c.itemNome} (Qtd: ${c.quantidade || 1})</div>
-                        <div class="list-item-sub">Data do pedido: ${c.data}</div>
-                        ${statusBadge}
-                    </div>
-                `;
-            });
         } catch (err) {
-            console.log(err);
+            console.log("Erro ao carregar do servidor, usando backup local", err);
         }
+
+        const container = document.getElementById('containerMinhasCautelas');
+        container.innerHTML = '';
+
+        if (cautelasLocais.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-sub); font-size: 0.9rem;">Você não possui cautelas ativas no momento.</p>';
+            return;
+        }
+
+        cautelasLocais.forEach(c => {
+            const statusBadge = c.status === 'PENDENTE'
+                ? '<span class="badge badge-pendente">Aguardando Aprovação</span>'
+                : `<span class="badge badge-aprovada">Aprovado (${c.dataAprovacao || c.data})</span>`;
+
+            container.innerHTML += `
+                <div class="list-item">
+                    <div class="list-item-title">${c.itemNome} (Qtd: ${c.quantidade || 1})</div>
+                    <div class="list-item-sub">Data do pedido: ${c.data}</div>
+                    ${statusBadge}
+                </div>
+            `;
+        });
     }
 
     document.getElementById('formSolicitar').addEventListener('submit', async (e) => {
@@ -192,16 +203,30 @@
         const quantidade = Number(document.getElementById('qtdSolicitada').value) || 1;
         if (!itemId) return;
 
-        await fetch('/api/solicitacoes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                saram: militarLogado.saram,
-                nomeGuerra: militarLogado.nomeGuerra,
-                itemId: itemId,
-                quantidade: quantidade
-            })
-        });
+        const novaSol = {
+            id: Date.now(),
+            saram: militarLogado.saram,
+            nomeGuerra: militarLogado.nomeGuerra,
+            itemId: itemId,
+            quantidade: quantidade,
+            data: new Date().toLocaleString('pt-BR'),
+            status: 'PENDENTE'
+        };
+
+        // Salvar imediatamente no backup do celular
+        let cautelasLocais = JSON.parse(localStorage.getItem(`cautelas_${militarLogado.saram}`)) || [];
+        cautelasLocais.push(novaSol);
+        localStorage.setItem(`cautelas_${militarLogado.saram}`, JSON.stringify(cautelasLocais));
+
+        try {
+            await fetch('/api/solicitacoes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(novaSol)
+            });
+        } catch (err) {
+            console.log("Servidor ocupado, gravado localmente", err);
+        }
 
         alert('Solicitação enviada para a reserva!');
         document.getElementById('qtdSolicitada').value = 1;
