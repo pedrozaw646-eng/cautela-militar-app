@@ -86,6 +86,10 @@
                         <option value="">Carregando estoque...</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label>Quantidade a Cautelar</label>
+                    <input type="number" id="qtdSolicitada" required min="1" value="1">
+                </div>
                 <button type="submit">Enviar Solicitação</button>
             </form>
         </div>
@@ -171,7 +175,7 @@
 
                 container.innerHTML += `
                     <div class="list-item">
-                        <div class="list-item-title">${c.itemNome}</div>
+                        <div class="list-item-title">${c.itemNome} (Qtd: ${c.quantidade || 1})</div>
                         <div class="list-item-sub">Data do pedido: ${c.data}</div>
                         ${statusBadge}
                     </div>
@@ -185,6 +189,7 @@
     document.getElementById('formSolicitar').addEventListener('submit', async (e) => {
         e.preventDefault();
         const itemId = document.getElementById('selectEstoque').value;
+        const quantidade = Number(document.getElementById('qtdSolicitada').value) || 1;
         if (!itemId) return;
 
         await fetch('/api/solicitacoes', {
@@ -193,11 +198,13 @@
             body: JSON.stringify({
                 saram: militarLogado.saram,
                 nomeGuerra: militarLogado.nomeGuerra,
-                itemId: itemId
+                itemId: itemId,
+                quantidade: quantidade
             })
         });
 
         alert('Solicitação enviada para a reserva!');
+        document.getElementById('qtdSolicitada').value = 1;
         carregarEstoque();
         carregarMinhasCautelas();
     });

@@ -169,7 +169,7 @@
                 <div class="list-item">
                     <div>
                         <div class="list-item-title">${s.nomeGuerra} (${s.saram})</div>
-                        <div class="list-item-sub">Item: ${s.itemNome} | ${s.data}</div>
+                        <div class="list-item-sub">Item: ${s.itemNome} | <b>Qtd: ${s.quantidade || 1}</b> | ${s.data}</div>
                     </div>
                     <div class="actions">
                         <button class="btn-success" onclick="aprovar(${s.id})">Aprovar</button>
@@ -193,7 +193,7 @@
                 <div class="list-item">
                     <div>
                         <div class="list-item-title">${s.nomeGuerra} (${s.saram})</div>
-                        <div class="list-item-sub">Item: ${s.itemNome}</div>
+                        <div class="list-item-sub">Item: ${s.itemNome} | <b>Qtd: ${s.quantidade || 1}</b></div>
                     </div>
                     <button class="btn-danger" onclick="devolver(${s.id})">Dar Baixa</button>
                 </div>

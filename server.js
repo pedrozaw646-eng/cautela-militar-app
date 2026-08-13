@@ -74,11 +74,12 @@ app.get('/api/solicitacoes', (req, res) => {
 });
 
 app.post('/api/solicitacoes', (req, res) => {
-    const { saram, nomeGuerra, itemId } = req.body;
+    const { saram, nomeGuerra, itemId, quantidade } = req.body;
+    const qtdNum = Number(quantidade) || 1;
     const item = DB.itens.find(i => i.id === Number(itemId));
 
-    if (!item || item.qtdDisponivel <= 0) {
-        return res.status(400).json({ error: 'Item indisponível' });
+    if (!item || item.qtdDisponivel < qtdNum) {
+        return res.status(400).json({ error: 'Quantidade indisponível em estoque' });
     }
 
     const novaSol = {
@@ -87,6 +88,7 @@ app.post('/api/solicitacoes', (req, res) => {
         nomeGuerra,
         itemId: item.id,
         itemNome: `${item.nome} [${item.codigo}]`,
+        quantidade: qtdNum,
         data: new Date().toLocaleString('pt-BR'),
         status: 'PENDENTE'
     };
@@ -99,12 +101,13 @@ app.post('/api/solicitacoes/:id/aprovar', (req, res) => {
     const id = Number(req.params.id);
     const sol = DB.solicitacoes.find(s => s.id === id);
     const item = DB.itens.find(i => i.id === sol.itemId);
+    const qtdNum = sol.quantidade || 1;
 
-    if (sol && item && item.qtdDisponivel > 0) {
+    if (sol && item && item.qtdDisponivel >= qtdNum) {
         sol.status = 'APROVADA';
         sol.dataAprovacao = new Date().toLocaleString('pt-BR');
-        item.qtdDisponivel -= 1;
-        item.qtdTotal -= 1;
+        item.qtdDisponivel -= qtdNum;
+        item.qtdTotal -= qtdNum;
         return res.json({ success: true });
     }
     res.status(400).json({ error: 'Não foi possível aprovar' });
@@ -114,11 +117,12 @@ app.post('/api/solicitacoes/:id/devolver', (req, res) => {
     const id = Number(req.params.id);
     const sol = DB.solicitacoes.find(s => s.id === id);
     const item = DB.itens.find(i => i.id === sol.itemId);
+    const qtdNum = sol.quantidade || 1;
 
     if (sol && item) {
         sol.status = 'DEVOLVIDO';
-        item.qtdDisponivel += 1;
-        item.qtdTotal += 1;
+        item.qtdDisponivel += qtdNum;
+        item.qtdTotal += qtdNum;
         return res.json({ success: true });
     }
     res.status(400).json({ error: 'Erro ao devolver' });
