@@ -76,13 +76,11 @@ app.get('/api/solicitacoes', (req, res) => {
 });
 
 app.post('/api/solicitacoes', (req, res) => {
-    const { id, saram, nomeGuerra, itemId, quantidade } = req.body;
+    const { id, saram, nomeGuerra, itemId, itemNome, quantidade } = req.body;
     const qtdNum = Number(quantidade) || 1;
-    const item = DB.itens.find(i => String(i.id) === String(itemId));
 
-    if (!item) {
-        return res.status(404).json({ error: 'Item não encontrado no estoque' });
-    }
+    const itemObj = DB.itens.find(i => String(i.id) === String(itemId));
+    const nomeItemFinal = itemNome || (itemObj ? `${itemObj.nome} [${itemObj.codigo}]` : 'Item Indefinido');
 
     const solId = id || Date.now();
     let solExistente = DB.solicitacoes.find(s => String(s.id) === String(solId));
@@ -92,8 +90,8 @@ app.post('/api/solicitacoes', (req, res) => {
             id: solId,
             saram,
             nomeGuerra,
-            itemId: item.id,
-            itemNome: `${item.nome} [${item.codigo}]`,
+            itemId: itemId,
+            itemNome: nomeItemFinal,
             quantidade: qtdNum,
             data: new Date().toLocaleString('pt-BR'),
             status: 'PENDENTE'

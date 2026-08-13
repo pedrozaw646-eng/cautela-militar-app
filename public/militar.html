@@ -200,21 +200,25 @@
 
     document.getElementById('formSolicitar').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const itemId = document.getElementById('selectEstoque').value;
+        const select = document.getElementById('selectEstoque');
+        const itemId = select.value;
         const quantidade = Number(document.getElementById('qtdSolicitada').value) || 1;
         if (!itemId) return;
+
+        const optionTexto = select.options[select.selectedIndex].text;
 
         const novaSol = {
             id: Date.now(),
             saram: militarLogado.saram,
             nomeGuerra: militarLogado.nomeGuerra,
             itemId: itemId,
+            itemNome: optionTexto.split(' - Restante:')[0],
             quantidade: quantidade,
             data: new Date().toLocaleString('pt-BR'),
             status: 'PENDENTE'
         };
 
-        // Salvar imediatamente no backup do celular
+        // Salvar localmente no celular
         let cautelasLocais = JSON.parse(localStorage.getItem(`cautelas_${militarLogado.saram}`)) || [];
         cautelasLocais.push(novaSol);
         localStorage.setItem(`cautelas_${militarLogado.saram}`, JSON.stringify(cautelasLocais));
@@ -226,7 +230,7 @@
                 body: JSON.stringify(novaSol)
             });
         } catch (err) {
-            console.log("Servidor ocupado, gravado localmente", err);
+            console.log("Erro ao enviar ao servidor", err);
         }
 
         alert('Solicitação enviada para a reserva!');
