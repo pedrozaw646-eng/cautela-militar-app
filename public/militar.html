@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Cautela Militar - App do Militar</title>
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root { --bg-color: #0f172a; --card-bg: #1e293b; --accent-primary: #3b82f6; --text-main: #f8fafc; --text-sub: #94a3b8; --border-color: #334155; --success: #22c55e; --warning: #f59e0b; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
@@ -79,6 +81,26 @@
 <script>
     let militarLogado = JSON.parse(localStorage.getItem('militar_logado')) || null;
 
+    async function syncEstoque() {
+        try {
+            const res = await fetch('/api/itens');
+            if (res.ok) {
+                const itens = await res.json();
+                localStorage.setItem('cautela_global_itens', JSON.stringify(itens));
+            }
+        } catch (e) {}
+    }
+
+    async function syncSolicitacoes() {
+        try {
+            const res = await fetch('/api/solicitacoes');
+            if (res.ok) {
+                const sol = await res.json();
+                localStorage.setItem('cautela_global_solicitacoes', JSON.stringify(sol));
+            }
+        } catch (e) {}
+    }
+
     function getDB() {
         return {
             itens: JSON.parse(localStorage.getItem('cautela_global_itens')) || [],
@@ -118,7 +140,10 @@
         checkAuth();
     }
 
-    function renderizar() {
+    async function renderizar() {
+        await syncEstoque();
+        await syncSolicitacoes();
+
         const { itens, solicitacoes } = getDB();
         const select = document.getElementById('selectEstoque');
         const valSel = select.value;
@@ -154,7 +179,7 @@
         });
     }
 
-    document.getElementById('formSolicitar').addEventListener('submit', (e) => {
+    document.getElementById('formSolicitar').addEventListener('submit', async (e) => {
         e.preventDefault();
         const select = document.getElementById('selectEstoque');
         const itemId = Number(select.value);
@@ -162,32 +187,37 @@
         if (!itemId) return;
 
         const { itens, solicitacoes } = getDB();
-        const item = itens.find(i => i.id === itemId);
+        const item = itens.find(i => Number(i.id) === itemId);
 
-        if (!item || item.qtdDisponivel < qtd) {
-            alert('Estoque insuficiente!');
-            return;
-        }
-
-        solicitacoes.push({
+        const novaSol = {
             id: Date.now(),
             saram: militarLogado.saram,
             nomeGuerra: militarLogado.nomeGuerra,
-            itemId: item.id,
-            itemNome: `${item.nome} [${item.codigo}]`,
+            itemId: itemId,
+            itemNome: item ? `${item.nome} [${item.codigo}]` : 'Item Cautelado',
             quantidade: qtd,
             data: new Date().toLocaleString('pt-BR'),
             status: 'PENDENTE'
-        });
+        };
 
+        solicitacoes.push(novaSol);
         saveDB({ itens, solicitacoes });
+
+        try {
+            await fetch('/api/solicitacoes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(novaSol)
+            });
+        } catch (e) {}
+
         alert('Solicitação enviada com sucesso!');
         document.getElementById('qtdSolicitada').value = 1;
         renderizar();
     });
 
     checkAuth();
-    setInterval(renderizar, 1000);
+    setInterval(renderizar, 2000);
 </script>
 </body>
 </html>

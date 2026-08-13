@@ -71,6 +71,26 @@
     </div>
 
 <script>
+    async function syncEstoque() {
+        try {
+            const res = await fetch('/api/itens');
+            if (res.ok) {
+                const itens = await res.json();
+                localStorage.setItem('cautela_global_itens', JSON.stringify(itens));
+            }
+        } catch (e) {}
+    }
+
+    async function syncSolicitacoes() {
+        try {
+            const res = await fetch('/api/solicitacoes');
+            if (res.ok) {
+                const sol = await res.json();
+                localStorage.setItem('cautela_global_solicitacoes', JSON.stringify(sol));
+            }
+        } catch (e) {}
+    }
+
     function getDB() {
         return {
             itens: JSON.parse(localStorage.getItem('cautela_global_itens')) || [
@@ -86,7 +106,7 @@
         localStorage.setItem('cautela_global_solicitacoes', JSON.stringify(db.solicitacoes));
     }
 
-    document.getElementById('formAdicionarItem').addEventListener('submit', (e) => {
+    document.getElementById('formAdicionarItem').addEventListener('submit', async (e) => {
         e.preventDefault();
         const nome = document.getElementById('nome').value.trim();
         const codigo = document.getElementById('codigo').value.trim();
@@ -109,34 +129,48 @@
         }
 
         saveDB({ itens, solicitacoes });
+
+        try {
+            await fetch('/api/itens', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nome, codigo, qtdTotal })
+            });
+        } catch (e) {}
+
         e.target.reset();
         alert('Item adicionado ao estoque!');
         renderizar();
     });
 
-    function aprovar(id) {
+    async function aprovar(id) {
         const { itens, solicitacoes } = getDB();
-        const sol = solicitacoes.find(s => s.id === id);
-        const item = itens.find(i => i.id === sol.itemId);
-        const qtd = sol.quantidade || 1;
+        const sol = solicitacoes.find(s => Number(s.id) === Number(id));
+        const item = itens.find(i => Number(i.id) === Number(sol?.itemId));
+        const qtd = sol?.quantidade || 1;
 
-        if (sol && item && item.qtdDisponivel >= qtd) {
+        if (sol) {
             sol.status = 'APROVADA';
             sol.dataAprovacao = new Date().toLocaleString('pt-BR');
-            item.qtdDisponivel -= qtd;
-            item.qtdTotal -= qtd;
+            if (item) {
+                item.qtdDisponivel = Math.max(0, item.qtdDisponivel - qtd);
+                item.qtdTotal = Math.max(0, item.qtdTotal - qtd);
+            }
             saveDB({ itens, solicitacoes });
+
+            try {
+                await fetch(`/api/solicitacoes/${id}/aprovar`, { method: 'POST' });
+            } catch (e) {}
+
             renderizar();
-        } else {
-            alert('Estoque insuficiente para aprovar!');
         }
     }
 
-    function devolver(id) {
+    async function devolver(id) {
         const { itens, solicitacoes } = getDB();
-        const sol = solicitacoes.find(s => s.id === id);
-        const item = itens.find(i => i.id === sol.itemId);
-        const qtd = sol.quantidade || 1;
+        const sol = solicitacoes.find(s => Number(s.id) === Number(id));
+        const item = itens.find(i => Number(i.id) === Number(sol?.itemId));
+        const qtd = sol?.quantidade || 1;
 
         if (sol) {
             sol.status = 'DEVOLVIDO';
@@ -145,20 +179,33 @@
                 item.qtdTotal += qtd;
             }
             saveDB({ itens, solicitacoes });
+
+            try {
+                await fetch(`/api/solicitacoes/${id}/devolver`, { method: 'POST' });
+            } catch (e) {}
+
             renderizar();
         }
     }
 
-    function excluirItem(id) {
+    async function excluirItem(id) {
         const { itens, solicitacoes } = getDB();
         if (confirm('Deseja realmente remover este item do estoque?')) {
-            const novosItens = itens.filter(i => i.id !== id);
+            const novosItens = itens.filter(i => Number(i.id) !== Number(id));
             saveDB({ itens: novosItens, solicitacoes });
+
+            try {
+                await fetch(`/api/itens/${id}`, { method: 'DELETE' });
+            } catch (e) {}
+
             renderizar();
         }
     }
 
-    function renderizar() {
+    async function renderizar() {
+        await syncEstoque();
+        await syncSolicitacoes();
+
         const { itens, solicitacoes } = getDB();
 
         // Tabela Estoque
@@ -220,7 +267,7 @@
     }
 
     renderizar();
-    setInterval(renderizar, 1000);
+    setInterval(renderizar, 2000);
 </script>
 </body>
 </html>
