@@ -68,9 +68,10 @@ app.get('/api/solicitacoes', (req, res) => {
     const { saram } = req.query;
     if (saram) {
         // Filtro por militar (mostra apenas cautelas ativas/pendentes do próprio militar)
-        const minhsSolicitacoes = DB.solicitacoes.filter(s => s.saram === saram && s.status !== 'DEVOLVIDO');
+        const minhsSolicitacoes = DB.solicitacoes.filter(s => String(s.saram) === String(saram) && s.status !== 'DEVOLVIDO');
         return res.json(minhsSolicitacoes);
     }
+    // Para o Admin (retorna todas as solicitações)
     res.json(DB.solicitacoes);
 });
 
