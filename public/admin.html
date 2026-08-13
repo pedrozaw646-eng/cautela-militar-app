@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Gestão de Estoque - Reserva Admin</title>
-    <!-- Firebase SDK Direct Integration -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
         :root { --bg-color: #0f172a; --card-bg: #1e293b; --accent-primary: #3b82f6; --text-main: #f8fafc; --text-sub: #94a3b8; --border-color: #334155; --danger: #ef4444; --success: #22c55e; --warning: #f59e0b; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
@@ -74,41 +71,20 @@
     </div>
 
 <script>
-    // Inicialização do Firebase Database Compartilhado
-    const firebaseConfig = {
-        databaseURL: "https://cautela-militar-default-rtdb.firebaseio.com/"
-    };
-    if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
-    const db = firebase.database();
+    function getDB() {
+        return {
+            itens: JSON.parse(localStorage.getItem('cautela_global_itens')) || [
+                { id: 1, nome: 'Capa de Colete', codigo: 'COL-001', qtdTotal: 5, qtdDisponivel: 5 },
+                { id: 2, nome: 'Colcha', codigo: 'COLCH-002', qtdTotal: 10, qtdDisponivel: 10 }
+            ],
+            solicitacoes: JSON.parse(localStorage.getItem('cautela_global_solicitacoes')) || []
+        };
+    }
 
-    // Sincronização em Tempo Real do Estoque
-    db.ref('estoque').on('value', snapshot => {
-        const data = snapshot.val() || {};
-        const container = document.getElementById('containerEstoque');
-        container.innerHTML = '';
-        
-        Object.keys(data).forEach(key => {
-            const i = data[key];
-            container.innerHTML += `
-                <div class="list-item">
-                    <div>
-                        <div class="list-item-title">${i.nome} [${i.codigo}]</div>
-                        <div class="list-item-sub">Total: ${i.qtdTotal} | Disponível: <b>${i.qtdDisponivel}</b></div>
-                    </div>
-                    <button class="btn-danger" onclick="excluirItem('${key}')">Excluir</button>
-                </div>
-            `;
-        });
-    });
-
-    // Sincronização em Tempo Real das Solicitações e Cautelas
-    db.ref('solicitacoes').on('value', snapshot => {
-        const data = snapshot.val() || {};
-        const solicitacoes = Object.keys(data).map(key => ({ id: key, ...data[key] }));
-
-        renderizarPendentes(solicitacoes);
-        renderizarAtivas(solicitacoes);
-    });
+    function saveDB(db) {
+        localStorage.setItem('cautela_global_itens', JSON.stringify(db.itens));
+        localStorage.setItem('cautela_global_solicitacoes', JSON.stringify(db.solicitacoes));
+    }
 
     document.getElementById('formAdicionarItem').addEventListener('submit', (e) => {
         e.preventDefault();
@@ -116,116 +92,135 @@
         const codigo = document.getElementById('codigo').value.trim();
         const qtdTotal = Number(document.getElementById('qtd').value) || 1;
 
-        const newRef = db.ref('estoque').push();
-        newRef.set({
-            nome: nome,
-            codigo: codigo,
-            qtdTotal: qtdTotal,
-            qtdDisponivel: qtdTotal
-        });
+        const { itens, solicitacoes } = getDB();
+        const itemExistente = itens.find(i => i.codigo === codigo);
 
+        if (itemExistente) {
+            itemExistente.qtdTotal += qtdTotal;
+            itemExistente.qtdDisponivel += qtdTotal;
+        } else {
+            itens.push({
+                id: Date.now(),
+                nome: nome,
+                codigo: codigo,
+                qtdTotal: qtdTotal,
+                qtdDisponivel: qtdTotal
+            });
+        }
+
+        saveDB({ itens, solicitacoes });
         e.target.reset();
-        alert('Item adicionado ao estoque com sucesso!');
+        alert('Item adicionado ao estoque!');
+        renderizar();
     });
 
-    function aprovar(id, itemKey, quantidade) {
-        const qtd = Number(quantidade) || 1;
-        
-        // Atualiza status da solicitação para APROVADA
-        db.ref(`solicitacoes/${id}`).update({
-            status: 'APROVADA',
-            dataAprovacao: new Date().toLocaleString('pt-BR')
-        });
+    function aprovar(id) {
+        const { itens, solicitacoes } = getDB();
+        const sol = solicitacoes.find(s => s.id === id);
+        const item = itens.find(i => i.id === sol.itemId);
+        const qtd = sol.quantidade || 1;
 
-        // Abate a quantidade do Estoque em Tempo Real
-        if (itemKey) {
-            db.ref(`estoque/${itemKey}`).once('value', snapshot => {
-                const item = snapshot.val();
-                if (item) {
-                    const novaDisp = Math.max(0, (item.qtdDisponivel || 0) - qtd);
-                    const novoTotal = Math.max(0, (item.qtdTotal || 0) - qtd);
-                    db.ref(`estoque/${itemKey}`).update({
-                        qtdDisponivel: novaDisp,
-                        qtdTotal: novoTotal
-                    });
-                }
-            });
+        if (sol && item && item.qtdDisponivel >= qtd) {
+            sol.status = 'APROVADA';
+            sol.dataAprovacao = new Date().toLocaleString('pt-BR');
+            item.qtdDisponivel -= qtd;
+            item.qtdTotal -= qtd;
+            saveDB({ itens, solicitacoes });
+            renderizar();
+        } else {
+            alert('Estoque insuficiente para aprovar!');
         }
     }
 
-    function devolver(id, itemKey, quantidade) {
-        const qtd = Number(quantidade) || 1;
+    function devolver(id) {
+        const { itens, solicitacoes } = getDB();
+        const sol = solicitacoes.find(s => s.id === id);
+        const item = itens.find(i => i.id === sol.itemId);
+        const qtd = sol.quantidade || 1;
 
-        // Atualiza status para DEVOLVIDO
-        db.ref(`solicitacoes/${id}`).update({
-            status: 'DEVOLVIDO'
-        });
-
-        // Retorna a quantidade ao Estoque em Tempo Real
-        if (itemKey) {
-            db.ref(`estoque/${itemKey}`).once('value', snapshot => {
-                const item = snapshot.val();
-                if (item) {
-                    db.ref(`estoque/${itemKey}`).update({
-                        qtdDisponivel: (item.qtdDisponivel || 0) + qtd,
-                        qtdTotal: (item.qtdTotal || 0) + qtd
-                    });
-                }
-            });
+        if (sol) {
+            sol.status = 'DEVOLVIDO';
+            if (item) {
+                item.qtdDisponivel += qtd;
+                item.qtdTotal += qtd;
+            }
+            saveDB({ itens, solicitacoes });
+            renderizar();
         }
     }
 
-    function excluirItem(key) {
+    function excluirItem(id) {
+        const { itens, solicitacoes } = getDB();
         if (confirm('Deseja realmente remover este item do estoque?')) {
-            db.ref(`estoque/${key}`).remove();
+            const novosItens = itens.filter(i => i.id !== id);
+            saveDB({ itens: novosItens, solicitacoes });
+            renderizar();
         }
     }
 
-    function renderizarPendentes(solicitacoes) {
-        const container = document.getElementById('containerPendentes');
-        container.innerHTML = '';
+    function renderizar() {
+        const { itens, solicitacoes } = getDB();
+
+        // Tabela Estoque
+        const containerEstoque = document.getElementById('containerEstoque');
+        containerEstoque.innerHTML = '';
+        itens.forEach(i => {
+            containerEstoque.innerHTML += `
+                <div class="list-item">
+                    <div>
+                        <div class="list-item-title">${i.nome} [${i.codigo}]</div>
+                        <div class="list-item-sub">Total: ${i.qtdTotal} | Disponível: <b>${i.qtdDisponivel}</b></div>
+                    </div>
+                    <button class="btn-danger" onclick="excluirItem(${i.id})">Excluir</button>
+                </div>
+            `;
+        });
+
+        // Pendentes
+        const containerPendentes = document.getElementById('containerPendentes');
+        containerPendentes.innerHTML = '';
         const pendentes = solicitacoes.filter(s => s.status === 'PENDENTE');
         if (pendentes.length === 0) {
-            container.innerHTML = '<p style="color: var(--text-sub); font-size: 0.9rem;">Nenhuma solicitação pendente.</p>';
-            return;
+            containerPendentes.innerHTML = '<p style="color: var(--text-sub); font-size: 0.9rem;">Nenhuma solicitação pendente.</p>';
+        } else {
+            pendentes.forEach(s => {
+                containerPendentes.innerHTML += `
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">${s.nomeGuerra} (${s.saram})</div>
+                            <div class="list-item-sub">Item: ${s.itemNome} | <b>Qtd: ${s.quantidade || 1}</b> | ${s.data}</div>
+                        </div>
+                        <div class="actions">
+                            <button class="btn-success" onclick="aprovar(${s.id})">Aprovar</button>
+                        </div>
+                    </div>
+                `;
+            });
         }
 
-        pendentes.forEach(s => {
-            container.innerHTML += `
-                <div class="list-item">
-                    <div>
-                        <div class="list-item-title">${s.nomeGuerra} (${s.saram})</div>
-                        <div class="list-item-sub">Item: ${s.itemNome} | <b>Qtd: ${s.quantidade || 1}</b> | ${s.data}</div>
-                    </div>
-                    <div class="actions">
-                        <button class="btn-success" onclick="aprovar('${s.id}', '${s.itemKey}', ${s.quantidade || 1})">Aprovar</button>
-                    </div>
-                </div>
-            `;
-        });
-    }
-
-    function renderizarAtivas(solicitacoes) {
-        const container = document.getElementById('containerAtivas');
-        container.innerHTML = '';
+        // Ativas
+        const containerAtivas = document.getElementById('containerAtivas');
+        containerAtivas.innerHTML = '';
         const ativas = solicitacoes.filter(s => s.status === 'APROVADA');
         if (ativas.length === 0) {
-            container.innerHTML = '<p style="color: var(--text-sub); font-size: 0.9rem;">Nenhuma cautela ativa no momento.</p>';
-            return;
-        }
-
-        ativas.forEach(s => {
-            container.innerHTML += `
-                <div class="list-item">
-                    <div>
-                        <div class="list-item-title">${s.nomeGuerra} (${s.saram})</div>
-                        <div class="list-item-sub">Item: ${s.itemNome} | <b>Qtd: ${s.quantidade || 1}</b></div>
+            containerAtivas.innerHTML = '<p style="color: var(--text-sub); font-size: 0.9rem;">Nenhuma cautela ativa.</p>';
+        } else {
+            ativas.forEach(s => {
+                containerAtivas.innerHTML += `
+                    <div class="list-item">
+                        <div>
+                            <div class="list-item-title">${s.nomeGuerra} (${s.saram})</div>
+                            <div class="list-item-sub">Item: ${s.itemNome} | <b>Qtd: ${s.quantidade || 1}</b></div>
+                        </div>
+                        <button class="btn-danger" onclick="devolver(${s.id})">Dar Baixa</button>
                     </div>
-                    <button class="btn-danger" onclick="devolver('${s.id}', '${s.itemKey}', ${s.quantidade || 1})">Dar Baixa</button>
-                </div>
-            `;
-        });
+                `;
+            });
+        }
     }
+
+    renderizar();
+    setInterval(renderizar, 1000);
 </script>
 </body>
 </html>

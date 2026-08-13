@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Cautela Militar - App do Militar</title>
-    <!-- Firebase SDK Direct Integration -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
         :root { --bg-color: #0f172a; --card-bg: #1e293b; --accent-primary: #3b82f6; --text-main: #f8fafc; --text-sub: #94a3b8; --border-color: #334155; --success: #22c55e; --warning: #f59e0b; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
@@ -80,21 +77,26 @@
     </div>
 
 <script>
-    // Inicialização do Firebase Database Compartilhado
-    const firebaseConfig = {
-        databaseURL: "https://cautela-militar-default-rtdb.firebaseio.com/"
-    };
-    if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
-    const db = firebase.database();
-
     let militarLogado = JSON.parse(localStorage.getItem('militar_logado')) || null;
+
+    function getDB() {
+        return {
+            itens: JSON.parse(localStorage.getItem('cautela_global_itens')) || [],
+            solicitacoes: JSON.parse(localStorage.getItem('cautela_global_solicitacoes')) || []
+        };
+    }
+
+    function saveDB(db) {
+        localStorage.setItem('cautela_global_itens', JSON.stringify(db.itens));
+        localStorage.setItem('cautela_global_solicitacoes', JSON.stringify(db.solicitacoes));
+    }
 
     function checkAuth() {
         if (militarLogado) {
             document.getElementById('screenLogin').style.display = 'none';
             document.getElementById('screenApp').style.display = 'block';
             document.getElementById('userDisplay').innerText = `${militarLogado.nomeGuerra} (${militarLogado.saram})`;
-            conectarFirebase();
+            renderizar();
         } else {
             document.getElementById('screenLogin').style.display = 'block';
             document.getElementById('screenApp').style.display = 'none';
@@ -116,82 +118,76 @@
         checkAuth();
     }
 
-    function conectarFirebase() {
-        // Escutar Estoque em Tempo Real
-        db.ref('estoque').on('value', snapshot => {
-            const data = snapshot.val() || {};
-            const select = document.getElementById('selectEstoque');
-            const valSel = select.value;
-            select.innerHTML = '<option value="">Selecione o equipamento...</option>';
-            
-            Object.keys(data).forEach(key => {
-                const i = data[key];
-                const qtdDisp = Number(i.qtdDisponivel);
-                if (!isNaN(qtdDisp) && qtdDisp > 0) {
-                    select.innerHTML += `<option value="${key}">${i.nome} [${i.codigo}] - Disp: ${qtdDisp}</option>`;
-                }
-            });
-            if (valSel) select.value = valSel;
-        }, err => {
-            console.log("Erro de permissão no Firebase:", err);
+    function renderizar() {
+        const { itens, solicitacoes } = getDB();
+        const select = document.getElementById('selectEstoque');
+        const valSel = select.value;
+
+        select.innerHTML = '<option value="">Selecione o equipamento...</option>';
+        itens.filter(i => Number(i.qtdDisponivel) > 0).forEach(i => {
+            select.innerHTML += `<option value="${i.id}">${i.nome} [${i.codigo}] - Disp: ${i.qtdDisponivel}</option>`;
         });
+        if (valSel) select.value = valSel;
 
-        // Escutar Minhas Cautelas em Tempo Real
-        db.ref('solicitacoes').on('value', snapshot => {
-            const data = snapshot.val() || {};
-            const container = document.getElementById('containerMinhasCautelas');
-            container.innerHTML = '';
+        const container = document.getElementById('containerMinhasCautelas');
+        container.innerHTML = '';
 
-            const minhas = Object.keys(data)
-                .map(key => ({ id: key, ...data[key] }))
-                .filter(s => String(s.saram) === String(militarLogado.saram) && s.status !== 'DEVOLVIDO');
+        const minhas = solicitacoes.filter(s => String(s.saram) === String(militarLogado.saram) && s.status !== 'DEVOLVIDO');
 
-            if (minhas.length === 0) {
-                container.innerHTML = '<p style="color: var(--text-sub); font-size: 0.9rem;">Você não possui cautelas ativas.</p>';
-                return;
-            }
+        if (minhas.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-sub); font-size: 0.9rem;">Você não possui cautelas ativas.</p>';
+            return;
+        }
 
-            minhas.forEach(c => {
-                const badge = c.status === 'PENDENTE'
-                    ? '<span class="badge badge-pendente">Aguardando Aprovação</span>'
-                    : `<span class="badge badge-aprovada">Aprovado (${c.dataAprovacao || c.data})</span>`;
+        minhas.forEach(c => {
+            const badge = c.status === 'PENDENTE'
+                ? '<span class="badge badge-pendente">Aguardando Aprovação</span>'
+                : `<span class="badge badge-aprovada">Aprovado (${c.dataAprovacao || c.data})</span>`;
 
-                container.innerHTML += `
-                    <div class="list-item">
-                        <div class="list-item-title">${c.itemNome} (Qtd: ${c.quantidade || 1})</div>
-                        <div class="list-item-sub">Data do pedido: ${c.data}</div>
-                        ${badge}
-                    </div>
-                `;
-            });
+            container.innerHTML += `
+                <div class="list-item">
+                    <div class="list-item-title">${c.itemNome} (Qtd: ${c.quantidade || 1})</div>
+                    <div class="list-item-sub">Data do pedido: ${c.data}</div>
+                    ${badge}
+                </div>
+            `;
         });
     }
 
     document.getElementById('formSolicitar').addEventListener('submit', (e) => {
         e.preventDefault();
         const select = document.getElementById('selectEstoque');
-        const itemKey = select.value;
+        const itemId = Number(select.value);
         const qtd = Number(document.getElementById('qtdSolicitada').value) || 1;
-        if (!itemKey) return;
+        if (!itemId) return;
 
-        const text = select.options[select.selectedIndex].text;
+        const { itens, solicitacoes } = getDB();
+        const item = itens.find(i => i.id === itemId);
 
-        const newRef = db.ref('solicitacoes').push();
-        newRef.set({
+        if (!item || item.qtdDisponivel < qtd) {
+            alert('Estoque insuficiente!');
+            return;
+        }
+
+        solicitacoes.push({
+            id: Date.now(),
             saram: militarLogado.saram,
             nomeGuerra: militarLogado.nomeGuerra,
-            itemKey: itemKey,
-            itemNome: text.split(' - Disp:')[0],
+            itemId: item.id,
+            itemNome: `${item.nome} [${item.codigo}]`,
             quantidade: qtd,
             data: new Date().toLocaleString('pt-BR'),
             status: 'PENDENTE'
         });
 
-        alert('Solicitação enviada em tempo real para a reserva!');
+        saveDB({ itens, solicitacoes });
+        alert('Solicitação enviada com sucesso!');
         document.getElementById('qtdSolicitada').value = 1;
+        renderizar();
     });
 
     checkAuth();
+    setInterval(renderizar, 1000);
 </script>
 </body>
 </html>
