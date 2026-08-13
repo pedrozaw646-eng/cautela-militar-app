@@ -120,23 +120,23 @@
         });
 
         e.target.reset();
-        carregarDados();
+        await carregarDados();
     });
 
     async function aprovar(id) {
         await fetch(`/api/solicitacoes/${id}/aprovar`, { method: 'POST' });
-        carregarDados();
+        await carregarDados();
     }
 
     async function devolver(id) {
         await fetch(`/api/solicitacoes/${id}/devolver`, { method: 'POST' });
-        carregarDados();
+        await carregarDados();
     }
 
     async function excluirItem(id) {
         if (confirm('Deseja realmente remover este item do estoque?')) {
             await fetch(`/api/itens/${id}`, { method: 'DELETE' });
-            carregarDados();
+            await carregarDados();
         }
     }
 
