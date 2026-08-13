@@ -132,13 +132,20 @@
 
     async function carregarEstoque() {
         try {
+            const select = document.getElementById('selectEstoque');
+            const valorSelecionado = select.value; // Salva o item que o usuário selecionou
+
             const res = await fetch('/api/itens');
             const itens = await res.json();
-            const select = document.getElementById('selectEstoque');
+            
             select.innerHTML = '<option value="">Selecione o equipamento...</option>';
             itens.filter(i => i.qtdDisponivel > 0).forEach(i => {
                 select.innerHTML += `<option value="${i.id}">${i.nome} [${i.codigo}] - Restante: ${i.qtdDisponivel}</option>`;
             });
+
+            if (valorSelecionado) {
+                select.value = valorSelecionado; // Restaura a seleção do usuário
+            }
         } catch (err) {
             console.log("Servidor off, carregando local", err);
         }
