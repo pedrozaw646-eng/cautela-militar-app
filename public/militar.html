@@ -126,11 +126,14 @@
             
             Object.keys(data).forEach(key => {
                 const i = data[key];
-                if (i.qtdDisponivel > 0) {
-                    select.innerHTML += `<option value="${key}">${i.nome} [${i.codigo}] - Disp: ${i.qtdDisponivel}</option>`;
+                const qtdDisp = Number(i.qtdDisponivel);
+                if (!isNaN(qtdDisp) && qtdDisp > 0) {
+                    select.innerHTML += `<option value="${key}">${i.nome} [${i.codigo}] - Disp: ${qtdDisp}</option>`;
                 }
             });
             if (valSel) select.value = valSel;
+        }, err => {
+            console.log("Erro de permissão no Firebase:", err);
         });
 
         // Escutar Minhas Cautelas em Tempo Real

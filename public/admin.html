@@ -112,19 +112,20 @@
 
     document.getElementById('formAdicionarItem').addEventListener('submit', (e) => {
         e.preventDefault();
-        const nome = document.getElementById('nome').value;
-        const codigo = document.getElementById('codigo').value;
-        const qtdTotal = Number(document.getElementById('qtd').value);
+        const nome = document.getElementById('nome').value.trim();
+        const codigo = document.getElementById('codigo').value.trim();
+        const qtdTotal = Number(document.getElementById('qtd').value) || 1;
 
         const newRef = db.ref('estoque').push();
         newRef.set({
-            nome,
-            codigo,
-            qtdTotal,
+            nome: nome,
+            codigo: codigo,
+            qtdTotal: qtdTotal,
             qtdDisponivel: qtdTotal
         });
 
         e.target.reset();
+        alert('Item adicionado ao estoque com sucesso!');
     });
 
     function aprovar(id, itemKey, quantidade) {
